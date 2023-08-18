@@ -16,17 +16,19 @@ lazy_static! {
 /// Configuration options for JsonBuilder
 #[derive(Default)]
 pub struct JsonConfig {
-  charkey:          Option<String>,
-  attrkey:          Option<String>,
-  empty_tag:        Option<String>,
-  explicit_root:    Option<bool>,
-  trim:             Option<bool>,
-  ignore_attrs:     Option<bool>,
-  merge_attrs:      Option<bool>,
-  normalize_text:   Option<bool>,
-  lowercase_tags:   Option<bool>,
-  explicit_array:   Option<bool>,
-  explicit_charkey: Option<bool>
+  charkey: Option<String>,
+  attrkey: Option<String>,
+  empty_tag: Option<String>,
+  cdata_key: Option<String>,
+  cdata_char_key: Option<String>,
+  explicit_root: Option<bool>,
+  trim: Option<bool>,
+  ignore_attrs: Option<bool>,
+  merge_attrs: Option<bool>,
+  normalize_text: Option<bool>,
+  lowercase_tags: Option<bool>,
+  explicit_array: Option<bool>,
+  explicit_charkey: Option<bool>,
 }
 
 /// JsonBuilder configuration options
@@ -37,17 +39,19 @@ impl JsonConfig {
   /// `self`s methods. Any options not set will use their defaults upon call to `finalize`.
   pub fn new() -> JsonConfig {
     JsonConfig {
-      charkey:          None,
-      attrkey:          None,
-      empty_tag:        None,
-      explicit_root:    None,
-      trim:             None,
-      ignore_attrs:     None,
-      merge_attrs:      None,
-      normalize_text:   None,
-      lowercase_tags:   None,
-      explicit_array:   None,
-      explicit_charkey: None
+      charkey: None,
+      attrkey: None,
+      empty_tag: None,
+      cdata_key: None,
+      cdata_char_key: None,
+      explicit_root: None,
+      trim: None,
+      ignore_attrs: None,
+      merge_attrs: None,
+      normalize_text: None,
+      lowercase_tags: None,
+      explicit_array: None,
+      explicit_charkey: None,
     }
   }
 
@@ -160,17 +164,19 @@ impl JsonConfig {
   /// Finalize configuration options and build a JsonBuilder instance
   pub fn finalize(&self) -> JsonBuilder {
     JsonBuilder {
-      charkey:          self.charkey.clone().unwrap_or_else(|| "_".to_owned()),
-      attrkey:          self.attrkey.clone().unwrap_or_else(|| "$".to_owned()),
-      empty_tag:        self.empty_tag.clone().unwrap_or_else(|| "".to_owned()),
-      explicit_root:    self.explicit_root.clone().unwrap_or(true),
-      trim:             self.trim.clone().unwrap_or(false),
-      ignore_attrs:     self.ignore_attrs.clone().unwrap_or(false),
-      merge_attrs:      self.merge_attrs.clone().unwrap_or(false),
-      normalize_text:   self.normalize_text.clone().unwrap_or(false),
-      lowercase_tags:   self.lowercase_tags.clone().unwrap_or(false),
-      explicit_array:   self.explicit_array.clone().unwrap_or(true),
-      explicit_charkey: self.explicit_charkey.clone().unwrap_or(false)
+      charkey: self.charkey.clone().unwrap_or_else(|| "_".to_owned()),
+      attrkey: self.attrkey.clone().unwrap_or_else(|| "$".to_owned()),
+      empty_tag: self.empty_tag.clone().unwrap_or_else(|| "".to_owned()),
+      cdata_key: self.cdata_key.clone().unwrap_or_else(|| "__cdata".to_owned()),
+      cdata_char_key: self.cdata_char_key.clone().unwrap_or_else(|| "\\\\c".to_owned()),
+      explicit_root: self.explicit_root.clone().unwrap_or(true),
+      trim: self.trim.clone().unwrap_or(false),
+      ignore_attrs: self.ignore_attrs.clone().unwrap_or(false),
+      merge_attrs: self.merge_attrs.clone().unwrap_or(false),
+      normalize_text: self.normalize_text.clone().unwrap_or(false),
+      lowercase_tags: self.lowercase_tags.clone().unwrap_or(false),
+      explicit_array: self.explicit_array.clone().unwrap_or(true),
+      explicit_charkey: self.explicit_charkey.clone().unwrap_or(false),
     }
   }
 }
@@ -178,15 +184,17 @@ impl JsonConfig {
 // Text storage with state to distingiush between text in elements and text in CDATA sections
 // CDATA (literal) text will be added to JSON even when it is whitespace.
 struct Text {
-  data:    String,
-  literal: bool
+  data: String,
+  cdata: String,
+  literal: bool,
 }
 
 impl Default for Text {
   fn default() -> Text {
     Text {
-      data:    "".to_owned(),
-      literal: false
+      data: "".to_owned(),
+      cdata: "".to_owned(),
+      literal: false,
     }
   }
 }
@@ -194,47 +202,51 @@ impl Default for Text {
 // Stores state for the current and previous levels in the XML tree.
 struct Node {
   value: JsonValue,
-  text:  Text
+  text: Text,
 }
 
 impl Node {
   fn new() -> Node {
     Node {
       value: json!({}),
-      text:  Text::default()
+      text: Text::default(),
     }
   }
 }
 
 /// JSON builder struct for building JSON from XML
 pub struct JsonBuilder {
-  charkey:          String,
-  attrkey:          String,
-  empty_tag:        String,
-  explicit_root:    bool,
-  trim:             bool,
-  ignore_attrs:     bool,
-  merge_attrs:      bool,
-  normalize_text:   bool,
-  lowercase_tags:   bool,
-  explicit_array:   bool,
-  explicit_charkey: bool
+  charkey: String,
+  attrkey: String,
+  empty_tag: String,
+  cdata_key: String,
+  cdata_char_key: String,
+  explicit_root: bool,
+  trim: bool,
+  ignore_attrs: bool,
+  merge_attrs: bool,
+  normalize_text: bool,
+  lowercase_tags: bool,
+  explicit_array: bool,
+  explicit_charkey: bool,
 }
 
 impl Default for JsonBuilder {
   fn default() -> JsonBuilder {
     JsonBuilder {
-      charkey:          "_".to_owned(),
-      attrkey:          "$".to_owned(),
-      empty_tag:        "".to_owned(),
-      explicit_root:    true,
-      trim:             false,
-      ignore_attrs:     false,
-      merge_attrs:      false,
-      normalize_text:   false,
-      lowercase_tags:   false,
-      explicit_array:   true,
-      explicit_charkey: false
+      charkey: "_".to_owned(),
+      attrkey: "$".to_owned(),
+      empty_tag: "".to_owned(),
+      cdata_key: "__cdata".to_owned(),
+      cdata_char_key: "\\\\c".to_owned(),
+      explicit_root: true,
+      trim: false,
+      ignore_attrs: false,
+      merge_attrs: false,
+      normalize_text: false,
+      lowercase_tags: false,
+      explicit_array: true,
+      explicit_charkey: false,
     }
   }
 }
@@ -329,7 +341,7 @@ impl JsonBuilder {
     // The JSON value that which will be nested inside of `outer` (unless we are at EOF)
     let mut inner = match stack.pop() {
       Some(j) => j,
-      None => return Err(Error::new(ErrorKind::Unknown, "Expected stack item at close tag."))
+      None => return Err(Error::new(ErrorKind::Unknown, "Expected stack item at close tag.")),
     };
     let stack_len = stack.len();
     let outer = stack.last_mut();
@@ -352,6 +364,7 @@ impl JsonBuilder {
         text = _normalized.trim().as_ref();
       }
 
+      //TODO jandle cdata tag
       if utils::json_is_empty(&inner.value) && !self.explicit_charkey {
         inner.value = JsonValue::String(text.to_owned());
       } else {
@@ -395,9 +408,30 @@ impl JsonBuilder {
 
   // Process XML CDATA
   fn process_cdata(&self, event: &BytesCData, stack: &mut Vec<Node>, reader: &mut Reader<&[u8]>) -> Result<(), Error> {
-    self.process_text(&event.clone().escape(), stack, reader)?;
+    // self.process_text(&event.clone().escape(), stack, reader)?;
+    let event_cdata = event.clone().escape().unescape_and_decode(&reader)?;
+
+    // if let Some(last_node) = stack.last_mut() {
+    //   let text = &mut last_node.text.data;
+    //   // Setting reader.trim_text will remove all whitespaces in char data. To preserve
+    //   // compatibility with node-xml2js two or more consecutive whitespace characters will be
+    //   // replaced with a single space and then the resulting string will be trimmed
+    //   if self.normalize_text && !text.is_empty() {
+    //     let normalized = TWO_OR_MORE_WHITESPACE_RE.replace_all(text, NoExpand(" ")).into_owned();
+    //     text.clear();
+    //     text.push_str(&normalized);
+    //     let _ = text.trim();
+    //   }
+    //   text.push_str(&cdata);
+    // }
 
     if let Some(mut last_node) = stack.last_mut() {
+      let cdata = &mut last_node.text.cdata;
+      cdata.push_str(&event_cdata);
+
+      let text = &mut last_node.text.data;
+      text.push_str(&self.cdata_char_key);
+
       last_node.text.literal = true;
     }
     Ok(())
@@ -440,7 +474,7 @@ impl JsonBuilder {
         Err(e) => {
           return Err(Error::new(
             ErrorKind::Syntax,
-            format!("Error at position {}: {:?}", reader.buffer_position(), e)
+            format!("Error at position {}: {:?}", reader.buffer_position(), e),
           ))
         },
       }
