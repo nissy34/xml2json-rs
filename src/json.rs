@@ -168,7 +168,7 @@ impl JsonConfig {
       attrkey: self.attrkey.clone().unwrap_or_else(|| "$".to_owned()),
       empty_tag: self.empty_tag.clone().unwrap_or_else(|| "".to_owned()),
       cdata_key: self.cdata_key.clone().unwrap_or_else(|| "__cdata".to_owned()),
-      cdata_char_key: self.cdata_char_key.clone().unwrap_or_else(|| "\\\\c".to_owned()),
+      cdata_char_key: self.cdata_char_key.clone().unwrap_or_else(|| "\\c".to_owned()),
       explicit_root: self.explicit_root.clone().unwrap_or(true),
       trim: self.trim.clone().unwrap_or(false),
       ignore_attrs: self.ignore_attrs.clone().unwrap_or(false),
@@ -349,6 +349,7 @@ impl JsonBuilder {
     // This can grow to contain other whitespace characters ('\s')
     let mut whitespace = "".to_owned();
     let mut text = inner.text.data.as_ref();
+    let cdata: &str= inner.text.cdata.as_ref();
 
     if self.is_whitespace(text) && !inner.text.literal {
       whitespace.push_str(text);
@@ -369,6 +370,10 @@ impl JsonBuilder {
         inner.value = JsonValue::String(text.to_owned());
       } else {
         inner.value[&self.charkey] = text.into();
+      }
+
+      if !cdata.is_empty() {
+        inner.value[&self.cdata_key] = cdata.into();
       }
     }
 
@@ -425,7 +430,7 @@ impl JsonBuilder {
     //   text.push_str(&cdata);
     // }
 
-    if let Some(mut last_node) = stack.last_mut() {
+    if let Some(last_node) = stack.last_mut() {
       let cdata = &mut last_node.text.cdata;
       cdata.push_str(&event_cdata);
 
