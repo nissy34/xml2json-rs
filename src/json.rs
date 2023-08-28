@@ -1,6 +1,6 @@
 use crate::{
   error::{Error, ErrorKind},
-  utils
+  utils,
 };
 
 use serde_json::{json, Value as JsonValue};
@@ -20,7 +20,6 @@ pub struct JsonConfig {
   attrkey: Option<String>,
   empty_tag: Option<String>,
   cdata_key: Option<String>,
-  cdata_char_key: Option<String>,
   explicit_root: Option<bool>,
   trim: Option<bool>,
   ignore_attrs: Option<bool>,
@@ -43,7 +42,6 @@ impl JsonConfig {
       attrkey: None,
       empty_tag: None,
       cdata_key: None,
-      cdata_char_key: None,
       explicit_root: None,
       trim: None,
       ignore_attrs: None,
@@ -168,7 +166,6 @@ impl JsonConfig {
       attrkey: self.attrkey.clone().unwrap_or_else(|| "$".to_owned()),
       empty_tag: self.empty_tag.clone().unwrap_or_else(|| "".to_owned()),
       cdata_key: self.cdata_key.clone().unwrap_or_else(|| "__cdata".to_owned()),
-      cdata_char_key: self.cdata_char_key.clone().unwrap_or_else(|| "\\c".to_owned()),
       explicit_root: self.explicit_root.clone().unwrap_or(true),
       trim: self.trim.clone().unwrap_or(false),
       ignore_attrs: self.ignore_attrs.clone().unwrap_or(false),
@@ -185,7 +182,7 @@ impl JsonConfig {
 // CDATA (literal) text will be added to JSON even when it is whitespace.
 struct Text {
   data: String,
-  cdata: String,
+  cdata: Vec<String>,
   literal: bool,
 }
 
@@ -193,7 +190,7 @@ impl Default for Text {
   fn default() -> Text {
     Text {
       data: "".to_owned(),
-      cdata: "".to_owned(),
+      cdata: Vec::new(),
       literal: false,
     }
   }
@@ -220,7 +217,6 @@ pub struct JsonBuilder {
   attrkey: String,
   empty_tag: String,
   cdata_key: String,
-  cdata_char_key: String,
   explicit_root: bool,
   trim: bool,
   ignore_attrs: bool,
@@ -238,7 +234,6 @@ impl Default for JsonBuilder {
       attrkey: "$".to_owned(),
       empty_tag: "".to_owned(),
       cdata_key: "__cdata".to_owned(),
-      cdata_char_key: "\\\\c".to_owned(),
       explicit_root: true,
       trim: false,
       ignore_attrs: false,
@@ -349,9 +344,13 @@ impl JsonBuilder {
     // This can grow to contain other whitespace characters ('\s')
     let mut whitespace = "".to_owned();
     let mut text = inner.text.data.as_ref();
-    let cdata: &str= inner.text.cdata.as_ref();
+    let cdata = &inner.text.cdata;
 
-    if self.is_whitespace(text) && !inner.text.literal {
+    if cdata.len() > 0 {
+      inner.value[&self.cdata_key] = json!(cdata);
+    }
+
+    if self.is_whitespace(text) {
       whitespace.push_str(text);
     } else {
       if self.trim {
@@ -365,15 +364,10 @@ impl JsonBuilder {
         text = _normalized.trim().as_ref();
       }
 
-      //TODO jandle cdata tag
       if utils::json_is_empty(&inner.value) && !self.explicit_charkey {
         inner.value = JsonValue::String(text.to_owned());
       } else {
         inner.value[&self.charkey] = text.into();
-      }
-
-      if !cdata.is_empty() {
-        inner.value[&self.cdata_key] = cdata.into();
       }
     }
 
@@ -417,25 +411,22 @@ impl JsonBuilder {
     let event_cdata = event.clone().escape().unescape_and_decode(&reader)?;
 
     // if let Some(last_node) = stack.last_mut() {
-    //   let text = &mut last_node.text.data;
-    //   // Setting reader.trim_text will remove all whitespaces in char data. To preserve
-    //   // compatibility with node-xml2js two or more consecutive whitespace characters will be
-    //   // replaced with a single space and then the resulting string will be trimmed
-    //   if self.normalize_text && !text.is_empty() {
-    //     let normalized = TWO_OR_MORE_WHITESPACE_RE.replace_all(text, NoExpand(" ")).into_owned();
-    //     text.clear();
-    //     text.push_str(&normalized);
-    //     let _ = text.trim();
-    //   }
+    // let text = &mut last_node.text.data;
+    // // Setting reader.trim_text will remove all whitespaces in char data. To preserve
+    // // compatibility with node-xml2js two or more consecutive whitespace characters will be
+    // // replaced with a single space and then the resulting string will be trimmed
+    // if self.normalize_text && !text.is_empty() {
+    //   let normalized = TWO_OR_MORE_WHITESPACE_RE.replace_all(text, NoExpand(" ")).into_owned();
+    //   text.clear();
+    //   text.push_str(&normalized);
+    //   let _ = text.trim();
+    // }
     //   text.push_str(&cdata);
     // }
 
     if let Some(last_node) = stack.last_mut() {
       let cdata = &mut last_node.text.cdata;
-      cdata.push_str(&event_cdata);
-
-      let text = &mut last_node.text.data;
-      text.push_str(&self.cdata_char_key);
+      cdata.push(event_cdata);
 
       last_node.text.literal = true;
     }

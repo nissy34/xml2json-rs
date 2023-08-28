@@ -1,11 +1,11 @@
 use quick_xml::{events::*, Writer};
 
-use std::{cell::RefCell, convert::TryFrom, io::Cursor, ops::DerefMut, rc::Rc};
-
 use crate::{
   error::{Error, ErrorKind},
-  utils
+  utils,
 };
+
+use std::{cell::RefCell, convert::TryFrom, io::Cursor, ops::DerefMut, rc::Rc};
 
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -17,14 +17,14 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 /// [Declaration]: struct.Declaration.html
 pub enum Encoding {
   /// UTF-8
-  UTF8 // see https://www.w3resource.com/xml/declarations.php
+  UTF8, // see https://www.w3resource.com/xml/declarations.php
 }
 
 impl Encoding {
   /// Serialize `Encoding` as a `&' static str`
   pub fn to_string(&self) -> &'static str {
     match *self {
-      Encoding::UTF8 => "UTF-8"
+      Encoding::UTF8 => "UTF-8",
     }
   }
 }
@@ -36,7 +36,7 @@ impl TryFrom<&str> for Encoding {
   fn try_from(s: &str) -> Result<Self, Self::Error> {
     match s {
       "UTF-8" | "UTF8" => Ok(Encoding::UTF8),
-      _ => Err(Error::new(ErrorKind::Encoding, format!("Cannot convert from {} to Encoding.", s)))
+      _ => Err(Error::new(ErrorKind::Encoding, format!("Cannot convert from {} to Encoding.", s))),
     }
   }
 }
@@ -52,7 +52,7 @@ pub enum Version {
   /// 1.0
   XML10,
   /// 1.1
-  XML11
+  XML11,
 }
 
 impl Version {
@@ -60,7 +60,7 @@ impl Version {
   pub fn to_string(&self) -> &'static str {
     match *self {
       Version::XML10 => "1.0",
-      Version::XML11 => "1.1"
+      Version::XML11 => "1.1",
     }
   }
 }
@@ -73,7 +73,7 @@ impl TryFrom<&str> for Version {
     match s {
       "1.0" => Ok(Version::XML10),
       "1.1" => Ok(Version::XML11),
-      _ => Err(Error::new(ErrorKind::Unknown, format!("Cannot convert from {} to Version.", s)))
+      _ => Err(Error::new(ErrorKind::Unknown, format!("Cannot convert from {} to Version.", s))),
     }
   }
 }
@@ -81,17 +81,17 @@ impl TryFrom<&str> for Version {
 #[derive(Clone)]
 /// XML Declaration
 pub struct Declaration {
-  version:    Version,
-  encoding:   Option<Encoding>,
-  standalone: Option<bool>
+  version: Version,
+  encoding: Option<Encoding>,
+  standalone: Option<bool>,
 }
 
 impl Default for Declaration {
   fn default() -> Declaration {
     Declaration {
-      version:    Version::XML10,
-      encoding:   None,
-      standalone: None
+      version: Version::XML10,
+      encoding: None,
+      standalone: None,
     }
   }
 }
@@ -102,7 +102,7 @@ impl Declaration {
     Declaration {
       version,
       encoding,
-      standalone
+      standalone,
     }
   }
 
@@ -122,7 +122,7 @@ impl Declaration {
 /// XML Indentation rendering options
 pub struct Indentation {
   indent_char: u8,
-  indent_size: usize
+  indent_size: usize,
 }
 
 /// Optional indentation rendering
@@ -141,18 +141,19 @@ impl Default for Indentation {
     let indent_char = b' ';
     Indentation {
       indent_char,
-      indent_size: 2
+      indent_size: 2,
     }
   }
 }
 
 /// XmlBuilder configuration options
 pub struct XmlConfig {
-  attrkey:   Option<String>,
-  charkey:   Option<String>,
+  attrkey: Option<String>,
+  charkey: Option<String>,
+  cdata_key: Option<String>,
   root_name: Option<String>,
-  decl:      Option<Declaration>,
-  rendering: Option<Indentation>
+  decl: Option<Declaration>,
+  rendering: Option<Indentation>,
 }
 
 impl Default for XmlConfig {
@@ -169,10 +170,11 @@ impl XmlConfig {
   pub fn new() -> XmlConfig {
     XmlConfig {
       root_name: None,
-      attrkey:   None,
-      charkey:   None,
-      decl:      None,
-      rendering: None
+      attrkey: None,
+      charkey: None,
+      cdata_key: None,
+      decl: None,
+      rendering: None,
     }
   }
 
@@ -238,32 +240,35 @@ impl XmlConfig {
       root_name: self.root_name.clone().unwrap_or_else(|| "root".to_owned()),
       attrkey: self.attrkey.clone().unwrap_or_else(|| "$".to_owned()),
       charkey: self.charkey.clone().unwrap_or_else(|| "_".to_owned()),
+      cdata_key: self.cdata_key.clone().unwrap_or_else(|| "__cdata".to_owned()),
       decl,
       writer: Rc::new(RefCell::new(writer)),
-      indent: self.rendering.clone()
+      indent: self.rendering.clone(),
     }
   }
 }
 
 /// XML builder
 pub struct XmlBuilder {
-  attrkey:   String,
-  charkey:   String,
+  attrkey: String,
+  charkey: String,
+  cdata_key: String,
   root_name: String,
-  decl:      Declaration,
-  writer:    Rc<RefCell<Writer<Cursor<Vec<u8>>>>>,
-  indent:    Option<Indentation>
+  decl: Declaration,
+  writer: Rc<RefCell<Writer<Cursor<Vec<u8>>>>>,
+  indent: Option<Indentation>,
 }
 
 impl Default for XmlBuilder {
   fn default() -> XmlBuilder {
     XmlBuilder {
       root_name: "root".to_owned(),
-      attrkey:   "$".to_owned(),
-      charkey:   "_".to_owned(),
-      decl:      Declaration::default(),
-      writer:    Rc::new(RefCell::new(Writer::new(Cursor::new(Vec::new())))),
-      indent:    None
+      attrkey: "$".to_owned(),
+      charkey: "_".to_owned(),
+      cdata_key: "__cdata".to_owned(),
+      decl: Declaration::default(),
+      writer: Rc::new(RefCell::new(Writer::new(Cursor::new(Vec::new())))),
+      indent: None,
     }
   }
 }
@@ -280,6 +285,11 @@ impl XmlBuilder {
   // Check if key is a character key
   fn is_charkey(&self, key: &str) -> bool {
     self.charkey == *key
+  }
+
+  // Check if key is a cdata key
+  fn is_cdata_key(&self, key: &str) -> bool {
+    self.cdata_key == *key
   }
 
   // Get all a attributes at node. If successful, returns a vector of (name, value) attributes
@@ -365,6 +375,14 @@ impl XmlBuilder {
     writer.write_event(Event::Text(text_content)).map_err(|e| e.into())
   }
 
+  // Write cdata
+  fn write_cdata(&mut self, cdata: &str) -> Result<(), Error> {
+    let mut writer_ref = self.writer.borrow_mut();
+    let writer = writer_ref.deref_mut();
+    let cdata_content = BytesCData::from_str(cdata);
+    writer.write_event(Event::CData(cdata_content)).map_err(|e| e.into())
+  }
+
   // Write element's end tag if the element wasn't self-closing
   fn write_end_tag(&mut self, key: &str, node: &JsonValue) -> Result<(), Error> {
     // If the tag was self-closing, do not write an end tag
@@ -404,7 +422,7 @@ impl XmlBuilder {
   fn is_leaf_node(&self, node: &JsonMap<String, JsonValue>) -> bool {
     let normal_keys: Vec<&str> = node
       .iter()
-      .filter(|&(k, _)| !self.is_charkey(k) && !self.is_attrkey(k))
+      .filter(|&(k, _)| !self.is_charkey(k) && !self.is_attrkey(k) && !self.is_cdata_key(k))
       .map(|(k, _)| k.as_ref())
       .collect();
     if normal_keys.is_empty() {
@@ -420,7 +438,7 @@ impl XmlBuilder {
       for (key, child) in object {
         // Traverse if the parent is not an attribute and not a character key
         let pk = parent_key.clone().unwrap_or_else(|| "".to_owned());
-        if !self.is_attrkey(&pk) && !self.is_charkey(&pk) {
+        if !self.is_attrkey(&pk) && !self.is_charkey(&pk) && !self.is_cdata_key(&pk) {
           if self.is_charkey(&key) {
             if self.indent.is_some() && !self.is_leaf_node(object) {
               if let Some(s) = child.as_str() {
@@ -433,7 +451,7 @@ impl XmlBuilder {
             }
           }
           // If we're not at an attribute and child is an object, write start tag, traverse and continue
-          else if !self.is_attrkey(&key) {
+          else if !self.is_attrkey(&key) && !self.is_cdata_key(key) {
             if !child.is_array() {
               self.write_start_tag(key, child)?;
               self.traverse(child, None)?;
@@ -444,6 +462,15 @@ impl XmlBuilder {
             continue;
           } else {
             self.traverse(child, Some(key.to_owned()))?;
+          }
+        }
+      }
+    } else if &parent_key.clone().unwrap_or_else(|| "".to_owned()) == &self.cdata_key {
+      if let Some(cdata_array) = node.as_array() {
+        for child in cdata_array {
+          let node_s = utils::to_string_raw(child);
+          if !node_s.is_empty() {
+            self.write_cdata(&node_s)?;
           }
         }
       }
